@@ -1,0 +1,19 @@
+#spring.application.name=meals-now
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5433/mealsnow
+    username: mealsnow
+    password: mealsnow_dev_pw
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: true
+  flyway:
+    enabled: true
+  profiles:
+    active: dev
+management:
+  endpoint:
+    health:
+      show-details: always
+

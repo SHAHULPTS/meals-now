@@ -1,0 +1,20 @@
+services:
+  postgres:
+    image: postgres:18
+    container_name: mealsnow-postgres
+    environment:
+      POSTGRES_DB: mealsnow
+      POSTGRES_USER: mealsnow
+      POSTGRES_PASSWORD: mealsnow_dev_pw
+    ports:
+      - "5433:5432"
+    volumes:
+      - mealsnow_pgdata:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mealsnow -d mealsnow"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  mealsnow_pgdata:
