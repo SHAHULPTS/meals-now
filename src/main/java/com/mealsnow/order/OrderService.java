@@ -92,4 +92,21 @@ public class OrderService {
 
 
     }
+
+    @Transactional
+    public OrderResponse changeStatus(UUID orderId, OrderStatus target) {
+        Order order = orderRepository.findById(orderId)
+               .orElseThrow(() -> new NotFoundException("Order not found: " + orderId));
+        if (!order.getStatus().canTransitionTo(target)) {
+                    throw new IllegalStateException(
+                        "Illegal transition: " + order.getStatus() + " -> " + target);
+        }
+        order.setStatus(target);
+        //    // dirty-checking flushes the change at commit;
+        return OrderResponse.from(orderRepository.save(order));
+    }
+
+
+
+
 }
