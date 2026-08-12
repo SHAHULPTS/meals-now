@@ -10,6 +10,8 @@ import com.mealsnow.identity.UserRepository;
 import com.mealsnow.order.dto.OrderLine;
 import com.mealsnow.order.dto.OrderResponse;
 import com.mealsnow.order.dto.PlaceOrderRequest;
+import com.mealsnow.order.payment.PaymentResult;
+import com.mealsnow.order.payment.PaymentService;
 import com.mealsnow.vendor.Vendor;
 import com.mealsnow.vendor.VendorRepository;
 import com.mealsnow.vendor.VendorStatus;
@@ -26,14 +28,16 @@ public class OrderService {
     private final MenuItemRepository menuItemRepository;
     private final VendorRepository vendorRepository;
     private final UserRepository userRepository;
+    private final PaymentService paymentService;
 
-
-    public OrderService(OrderRepository orderRepository, MenuItemRepository menuItemRepository, VendorRepository vendorRepository, UserRepository userRepository) {
+    public OrderService(OrderRepository orderRepository, MenuItemRepository menuItemRepository, VendorRepository vendorRepository, UserRepository userRepository, PaymentService paymentService) {
         this.orderRepository = orderRepository;
         this.menuItemRepository = menuItemRepository;
         this.vendorRepository = vendorRepository;
         this.userRepository = userRepository;
+        this.paymentService = paymentService;
     }
+
 
     @Transactional
     public OrderResponse placeOrder(String userId, PlaceOrderRequest req){
@@ -54,6 +58,7 @@ public class OrderService {
             order.setVendor(vendor);
             order.setStatus(OrderStatus.PLACED);   // Step 2 will move this behind payment
             BigDecimal total = BigDecimal.ZERO;
+
 
         for (OrderLine line : req.items()) {
             MenuItem item = menuItemRepository.findById(line.menuItemId())
@@ -77,8 +82,13 @@ public class OrderService {
         }
 
         order.setTotal(total);
-         Order saved = orderRepository.save(order);   // cascade ALL saves items too
-         return OrderResponse.from(saved);
+        PaymentResult payment = paymentService.charge(total);
+        if (!payment.success()) {
+            throw new IllegalStateException("Payment failed: " + payment.failureReason());
+        }
+
+        Order saved = orderRepository.save(order);   // reached only if payment succeeded
+        return OrderResponse.from(saved);
 
 
     }
