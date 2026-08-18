@@ -17,6 +17,9 @@ import com.mealsnow.vendor.VendorRepository;
 import com.mealsnow.vendor.VendorStatus;
 import java.util.EnumSet;
 import java.util.Set;
+
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -137,6 +140,18 @@ public class OrderService {
 
         // Target is fixed to CANCELLED; the state machine decides if it's legal now.
         return applyTransition(order, OrderStatus.CANCELLED);
+    }
+
+    @Transactional(readOnly = true)
+    public Page<OrderResponse> myOrders(String userId, Pageable pageable) {
+        return orderRepository.findByCustomerId(UUID.fromString(userId), pageable)
+                .map(OrderResponse::from);
+    }
+
+    @Transactional(readOnly = true)
+    public Page<OrderResponse> vendorOrders(String userId, Pageable pageable) {
+        return orderRepository.findByVendorOwnerId(UUID.fromString(userId), pageable)
+                .map(OrderResponse::from);
     }
 
 

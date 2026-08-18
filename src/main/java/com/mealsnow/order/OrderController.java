@@ -3,6 +3,8 @@ package com.mealsnow.order;
 import com.mealsnow.order.dto.OrderResponse;
 import com.mealsnow.order.dto.PlaceOrderRequest;
 import jakarta.validation.Valid;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -42,4 +44,18 @@ public class OrderController {
                                 @PathVariable UUID orderId) {
         return orderService.cancelOrder(userId, orderId);
     }
+    @GetMapping
+    @PreAuthorize("hasRole('CUSTOMER')")
+    public Page<OrderResponse> myOrders(@AuthenticationPrincipal String userId, Pageable pageable) {
+        return orderService.myOrders(userId, pageable);
+    }
+
+    @GetMapping("/vendor")
+    @PreAuthorize("hasRole('VENDOR')")
+    public Page<OrderResponse> vendorOrders(@AuthenticationPrincipal String userId, Pageable pageable) {
+        return orderService.vendorOrders(userId, pageable);
+    }
+
+
+
 }
