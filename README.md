@@ -4,7 +4,7 @@ A multi-vendor food delivery backend built as a hands-on, production-grade learn
 
 Built with Java 21 and Spring Boot 4, as a **modular monolith**: one deployable application, cleanly split into bounded modules (`identity`, `vendor`, `catalog`, `order`, `notification`) so the boundaries can be learned — and one module extracted into its own service later — without paying the operational cost of microservices up front.
 
-> **Status:** work in progress. Phases 0–3 are complete; Phase 4 (order lifecycle & state machine) is partway through. See the [Roadmap](#roadmap) for exactly what works today.
+> **Status:** work in progress. Phases 0–4 are complete; Phase 5 (Kafka + real-time) is in progress (step 2 done). See the [Roadmap](#roadmap) for exactly what works today.
 
 ---
 
@@ -36,7 +36,8 @@ Built with Java 21 and Spring Boot 4, as a **modular monolith**: one deployable 
 | Testing | JUnit 5, Mockito, Testcontainers |
 | Build | Maven (wrapper included) |
 | Containers | Docker / Docker Compose |
-| Planned | Apache Kafka + WebSocket (real-time), React frontend, GCP Cloud Run + Cloud SQL |
+| Messaging | Apache Kafka (real-time event streaming, order status updates) |
+| Planned | WebSocket (real-time), React frontend, GCP Cloud Run + Cloud SQL |
 
 ---
 
@@ -166,8 +167,10 @@ All non-auth endpoints require `Authorization: Bearer <token>`. Role gates are e
 | Method | Path | Role | Purpose |
 | --- | --- | --- | --- |
 | `POST` | `/orders` | `CUSTOMER` | Place an order; server recomputes totals and snapshots prices |
-
-> Vendor "advance status" and customer "cancel" endpoints, plus paginated order queries, are in progress (Phase 4, steps 4–5).
+| `POST` | `/orders/{id}/status` | `VENDOR` | Advance order status (vendor transitions: ACCEPTED → PREPARING → READY → OUT_FOR_DELIVERY → DELIVERED; can also REJECT) |
+| `POST` | `/orders/{id}/cancel` | `CUSTOMER` | Cancel an order (cancellable only in PLACED, ACCEPTED, PREPARING states) |
+| `GET` | `/orders` | `CUSTOMER` | List own orders (paginated) |
+| `GET` | `/orders/vendor` | `VENDOR` | List orders for own vendors (paginated) |
 
 ---
 
@@ -212,8 +215,8 @@ src/main/resources
 | 1 | Domain model, migrations, repositories, seed data, Testcontainers | ✅ Done |
 | 2 | Security: register/login, JWT, roles, Swagger | ✅ Done |
 | 3 | Vendor onboarding, admin approval, menu CRUD, global error handling | ✅ Done |
-| 4 | Order lifecycle: creation + price snapshot, mock payment, state machine | 🚧 In progress (steps 1–3 done; endpoints + tests next) |
-| 5 | Kafka events + WebSocket real-time status updates | ⬜ Planned |
+| 4 | Order lifecycle: creation + price snapshot, mock payment, state machine, vendor/customer status updates, paginated queries, tests | ✅ Done |
+| 5 | Kafka events + WebSocket real-time status updates | 🚧 In progress (steps 1–2 done: Kafka setup + event publishing; step 3 consumer + step 4 WebSocket next) |
 | 6 | React frontend (all three roles, live order tracking) | ⬜ Planned |
 | 7 | Production hardening: tests, observability, config/secrets | ⬜ Planned |
 | 8 | Dockerize & deploy to GCP (Cloud Run + Cloud SQL + managed Kafka) | ⬜ Planned |
