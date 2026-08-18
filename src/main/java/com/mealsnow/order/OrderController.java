@@ -35,4 +35,11 @@ public class OrderController {
                                  @Valid @RequestBody AdvanceStatusRequest req) {
         return orderService.advanceStatus(userId, orderId, req.target());
     }
+
+    @PostMapping("/{orderId}/cancel")
+    @PreAuthorize("hasRole('CUSTOMER')")
+    public OrderResponse cancel(@AuthenticationPrincipal String userId,
+                                @PathVariable UUID orderId) {
+        return orderService.cancelOrder(userId, orderId);
+    }
 }

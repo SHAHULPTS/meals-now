@@ -123,6 +123,23 @@ public class OrderService {
         return applyTransition(order, target);
     }
 
+
+    @Transactional
+    public OrderResponse cancelOrder(String userId, UUID orderId) {
+        // Load the order (404 if missing).
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new NotFoundException("Order not found: " + orderId));
+
+        // OWNERSHIP: the caller must be the customer who placed this order.
+        if (!order.getCustomer().getId().equals(UUID.fromString(userId))) {
+            throw new ForbiddenException("You can only cancel your own order");
+        }
+
+        // Target is fixed to CANCELLED; the state machine decides if it's legal now.
+        return applyTransition(order, OrderStatus.CANCELLED);
+    }
+
+
     private OrderResponse applyTransition(Order order, OrderStatus target) {
         if (!order.getStatus().canTransitionTo(target)) {
             throw new IllegalStateException(
