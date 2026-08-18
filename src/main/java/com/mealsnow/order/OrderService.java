@@ -15,6 +15,8 @@ import com.mealsnow.order.payment.PaymentService;
 import com.mealsnow.vendor.Vendor;
 import com.mealsnow.vendor.VendorRepository;
 import com.mealsnow.vendor.VendorStatus;
+import java.util.EnumSet;
+import java.util.Set;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -29,6 +31,10 @@ public class OrderService {
     private final VendorRepository vendorRepository;
     private final UserRepository userRepository;
     private final PaymentService paymentService;
+
+    private static final Set<OrderStatus> VENDOR_ALLOWED = EnumSet.of(
+            OrderStatus.ACCEPTED, OrderStatus.REJECTED, OrderStatus.PREPARING,
+            OrderStatus.READY, OrderStatus.OUT_FOR_DELIVERY, OrderStatus.DELIVERED);
 
     public OrderService(OrderRepository orderRepository, MenuItemRepository menuItemRepository, VendorRepository vendorRepository, UserRepository userRepository, PaymentService paymentService) {
         this.orderRepository = orderRepository;
@@ -93,18 +99,42 @@ public class OrderService {
 
     }
 
+
     @Transactional
-    public OrderResponse changeStatus(UUID orderId, OrderStatus target) {
+    public OrderResponse advanceStatus(String userId, UUID orderId, OrderStatus target) {
+        // GATE 1 (role) already enforced by @PreAuthorize on the controller.
+
+        // Load the order (404 if it doesn't exist).
         Order order = orderRepository.findById(orderId)
-               .orElseThrow(() -> new NotFoundException("Order not found: " + orderId));
+                .orElseThrow(() -> new NotFoundException("Order not found: " + orderId));
+
+        // GATE 2 — OWNERSHIP: this vendor must own the order's vendor.
+        // Walk order -> vendor -> owner -> id, compare to the caller.
+        if (!order.getVendor().getOwner().getId().equals(UUID.fromString(userId))) {
+            throw new ForbiddenException("You do not own this order's vendor");
+        }
+
+        // GATE 3 — ACTOR PERMISSION: is this a status a vendor is allowed to set?
+        if (!VENDOR_ALLOWED.contains(target)) {
+            throw new IllegalStateException("A vendor cannot move an order to " + target);
+        }
+
+        // GATE 4 — STATE-MACHINE LEGALITY (+ save) happens inside the helper.
+        return applyTransition(order, target);
+    }
+
+    private OrderResponse applyTransition(Order order, OrderStatus target) {
         if (!order.getStatus().canTransitionTo(target)) {
-                    throw new IllegalStateException(
-                        "Illegal transition: " + order.getStatus() + " -> " + target);
+            throw new IllegalStateException(
+                    "Illegal transition: " + order.getStatus() + " -> " + target);
         }
         order.setStatus(target);
-        //    // dirty-checking flushes the change at commit;
         return OrderResponse.from(orderRepository.save(order));
     }
+
+
+
+
 
 
 
