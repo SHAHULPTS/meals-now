@@ -15,9 +15,12 @@ import com.mealsnow.order.payment.PaymentService;
 import com.mealsnow.vendor.Vendor;
 import com.mealsnow.vendor.VendorRepository;
 import com.mealsnow.vendor.VendorStatus;
+
+import java.time.Instant;
 import java.util.EnumSet;
 import java.util.Set;
 
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -34,17 +37,19 @@ public class OrderService {
     private final VendorRepository vendorRepository;
     private final UserRepository userRepository;
     private final PaymentService paymentService;
+    private final ApplicationEventPublisher events;
 
     private static final Set<OrderStatus> VENDOR_ALLOWED = EnumSet.of(
             OrderStatus.ACCEPTED, OrderStatus.REJECTED, OrderStatus.PREPARING,
             OrderStatus.READY, OrderStatus.OUT_FOR_DELIVERY, OrderStatus.DELIVERED);
 
-    public OrderService(OrderRepository orderRepository, MenuItemRepository menuItemRepository, VendorRepository vendorRepository, UserRepository userRepository, PaymentService paymentService) {
+    public OrderService(OrderRepository orderRepository, MenuItemRepository menuItemRepository, VendorRepository vendorRepository, UserRepository userRepository, PaymentService paymentService, ApplicationEventPublisher events) {
         this.orderRepository = orderRepository;
         this.menuItemRepository = menuItemRepository;
         this.vendorRepository = vendorRepository;
         this.userRepository = userRepository;
         this.paymentService = paymentService;
+        this.events = events;
     }
 
 
@@ -97,6 +102,15 @@ public class OrderService {
         }
 
         Order saved = orderRepository.save(order);   // reached only if payment succeeded
+
+        events.publishEvent(new OrderStatusChanged(
+                saved.getId(),
+                saved.getCustomer().getId(),
+                saved.getVendor().getId(),
+                null,                    // brand-new order — no previous status
+                OrderStatus.PLACED,
+                Instant.now()));
+
         return OrderResponse.from(saved);
 
 
@@ -156,12 +170,23 @@ public class OrderService {
 
 
     private OrderResponse applyTransition(Order order, OrderStatus target) {
-        if (!order.getStatus().canTransitionTo(target)) {
+        OrderStatus previous = order.getStatus();          // Bug 2: capture BEFORE changing
+        if (!previous.canTransitionTo(target)) {
             throw new IllegalStateException(
-                    "Illegal transition: " + order.getStatus() + " -> " + target);
+                    "Illegal transition: " + previous + " -> " + target);
         }
         order.setStatus(target);
-        return OrderResponse.from(orderRepository.save(order));
+        Order saved = orderRepository.save(order);          // Bug 3: single save
+
+        events.publishEvent(new OrderStatusChanged(
+                saved.getId(),
+                saved.getCustomer().getId(),
+                saved.getVendor().getId(),
+                previous,                                    // Bug 1: real old status
+                target,                                      // Bug 1: real new status
+                Instant.now()));
+
+        return OrderResponse.from(saved);
     }
 
 
