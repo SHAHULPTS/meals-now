@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Meals Now — Live Order Tracking</title>
+<script src="https://cdn.jsdelivr.net/npm/sockjs-client@1.6.1/dist/sockjs.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@stomp/stompjs@7.0.0/bundles/stomp.umd.min.js"></script>
+<style>
+  body { font-family: system-ui, sans-serif; max-width: 640px; margin: 40px auto; padding: 0 16px; color:#1a1a1a; }
+  h1 { font-size: 1.3rem; }
+  label { display:block; font-size:.8rem; color:#555; margin-top:10px; }
+  input { width:100%; padding:8px; font-size:1rem; box-sizing:border-box; }
+  button { margin-top:14px; padding:10px 16px; font-size:1rem; cursor:pointer; }
+  #status { margin:14px 0; padding:8px 12px; border-radius:6px; background:#eee; font-size:.9rem; }
+  .on { background:#d8f5d8 !important; }
+  .off { background:#f5d8d8 !important; }
+  #events { list-style:none; padding:0; }
+  #events li { padding:10px 12px; margin:8px 0; border-left:4px solid #3b82f6; background:#f4f8ff; border-radius:4px; }
+  .old { color:#888; }
+</style>
+</head>
+<body>
+  <h1>Live Order Tracking</h1>
+  <p>Logs in as a customer, opens a WebSocket, and shows order-status pushes in real time.</p>
+
+  <label>Customer email</label>
+  <input id="email" value="live@test.com">
+  <label>Password</label>
+  <input id="password" type="password" value="pass1234">
+  <button id="connectBtn">Log in &amp; connect</button>
+
+  <div id="status">Not connected.</div>
+  <ul id="events"></ul>
+
+<script>
+const statusEl = document.getElementById('status');
+const eventsEl = document.getElementById('events');
+function setStatus(text, cls) { statusEl.textContent = text; statusEl.className = cls || ''; }
+
+document.getElementById('connectBtn').addEventListener('click', async () => {
+  const email = document.getElementById('email').value.trim();
+  const password = document.getElementById('password').value;
+
+  // 1. log in to get a JWT (same-origin, /auth is public)
+  setStatus('Logging in…');
+  let token;
+  try {
+    const res = await fetch('/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password })
+    });
+    if (!res.ok) { setStatus('Login failed: HTTP ' + res.status, 'off'); return; }
+    token = (await res.json()).token;
+  } catch (e) { setStatus('Login error: ' + e, 'off'); return; }
+
+  // 2. open the STOMP-over-SockJS connection, sending the JWT in the CONNECT frame
+  const client = new StompJs.Client({
+    webSocketFactory: () => new SockJS('/ws'),
+    connectHeaders: { Authorization: 'Bearer ' + token },
+    reconnectDelay: 3000,
+    onConnect: () => {
+      setStatus('Connected — waiting for order updates…', 'on');
+      // 3. subscribe to THIS user's private queue
+      client.subscribe('/user/queue/orders', (msg) => {
+        const e = JSON.parse(msg.body);
+        const li = document.createElement('li');
+        const from = e.oldStatus ? `<span class="old">${e.oldStatus} →</span> ` : '';
+        li.innerHTML = `${from}<strong>${e.newStatus}</strong><br>` +
+                       `<small>order ${e.orderId}</small>`;
+        eventsEl.prepend(li);
+      });
+    },
+    onStompError: (f) => setStatus('STOMP error: ' + f.headers['message'], 'off'),
+    onWebSocketClose: () => setStatus('Disconnected.', 'off')
+  });
+  client.activate();
+});
+</script>
+</body>
+</html>
